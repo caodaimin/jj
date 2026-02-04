@@ -25,37 +25,34 @@ class Config:
     ffmpeg: str = "ffmpeg"
     ffprobe: str = "ffprobe"
     
-    # 【画面优化】目标分辨率 720x1280 (9:16), 60fps
+    # Default to Vertical 9:16
     out_w: int = 720
     out_h: int = 1280
     fps: int = 60
     
     sr: int = 48000
-    # Increase duration to cover longer scripts (will be cut by -shortest later)
     duration_sec: int = 60 
     
     bgm_path: str = "assets/bgm.mp3"
-    ass_tpl_path: str = "templates/subtitle.ass.tpl"
+    # We will generate ASS header dynamically or use template
+    ass_tpl_path: str = "templates/subtitle.ass.tpl" 
     work_dir: str = "output/_work"
 
-    # 【安全】从环境变量读取 Key
-    use_zhipu_tts: bool = False # Disable Zhipu
-    use_manbo_tts: bool = True  # Enable Manbo
+    # API Keys
+    use_zhipu_tts: bool = False
+    use_manbo_tts: bool = True
     zhipu_api_key: str = os.getenv("ZHIPU_API_KEY", "") 
     zhipu_voice_id: str = "tongtong" 
     zhipu_ref_audio: str = None 
 
-    # 画面动效开关
     enable_zoompan: bool = True
-    # 钩子文案
     hook_text: str = "3秒学会跑刀！"
     
-    # 语音语速 (1.0 = normal, 1.2 = 20% faster)
     audio_speed: float = 1.2
-
-
-CFG = Config()
-tts_client = None
+    
+    # New: Input directories
+    in_video_dir: str = "E:\\jj\\input"
+    script_dir: str = "E:\\jj\\文案"
 
 
 # -------------------------
@@ -70,9 +67,9 @@ def ensure_dir(p: str) -> None:
     Path(p).mkdir(parents=True, exist_ok=True)
 
 
-def ffprobe_duration(video_path: str) -> float:
+def ffprobe_duration(video_path: str, config: Config) -> float:
     cmd = [
-        CFG.ffprobe, "-v", "error",
+        config.ffprobe, "-v", "error",
         "-show_entries", "format=duration",
         "-of", "default=noprint_wrappers=1:nokey=1",
         video_path
@@ -127,10 +124,10 @@ def highlight_keywords(line: str, keywords: List[str]) -> str:
 # -------------------------
 # Diagnostics (New)
 # -------------------------
-def check_audio_streams(video_path: str):
+def check_audio_streams(video_path: str, config: Config):
     """【自检1】检查文件是否包含音频流"""
     print(f"\n[Check] Inspecting streams in {video_path}...")
-    cmd = [CFG.ffprobe, "-v", "error", "-show_streams", video_path]
+    cmd = [config.ffprobe, "-v", "error", "-show_streams", video_path]
     try:
         res = subprocess.check_output(cmd).decode()
         if "codec_type=audio" in res:
@@ -141,12 +138,12 @@ def check_audio_streams(video_path: str):
         print(f"  -> FAIL: ffprobe error: {e}")
 
 
-def check_wav_volume(wav_path: str):
+def check_wav_volume(wav_path: str, config: Config):
     """【自检2】检查音频文件的响度，确保不是静音"""
     print(f"\n[Check] Analyzing volume of {wav_path}...")
     # volumedetect filter
     cmd = [
-        CFG.ffmpeg, "-i", wav_path,
+        config.ffmpeg, "-i", wav_path,
         "-af", "volumedetect",
         "-f", "null", "/dev/null"
     ]
@@ -170,7 +167,7 @@ def check_wav_volume(wav_path: str):
         print("  -> WARNING: Could not parse volumedetect output.")
 
 
-def process_audio_speed(in_file: str, out_file: str, speed: float) -> bool:
+def process_audio_speed(in_file: str, out_file: str, speed: float, config: Config) -> bool:
     """
     Use ffmpeg atempo filter to change speed without pitch shift.
     Supports speed from 0.5 to 2.0 (single pass).
@@ -180,7 +177,7 @@ def process_audio_speed(in_file: str, out_file: str, speed: float) -> bool:
         
     print(f"  -> Applying audio speed {speed}x...")
     cmd = [
-        CFG.ffmpeg, "-y",
+        config.ffmpeg, "-y",
         "-i", in_file,
         "-filter:a", f"atempo={speed}",
         "-vn", 
@@ -196,7 +193,9 @@ def process_audio_speed(in_file: str, out_file: str, speed: float) -> bool:
 # -------------------------
 # TTS Logic
 # -------------------------
-def tts_generate_wav(text: str, out_wav: str) -> None:
+tts_client = None
+
+def tts_generate_wav(text: str, out_wav: str, config: Config) -> None:
     """
     【修复】
     1. 接收 TTS API 返回的二进制数据
@@ -206,7 +205,7 @@ def tts_generate_wav(text: str, out_wav: str) -> None:
     global tts_client
     
     # 尝试使用 Manbo TTS
-    if CFG.use_manbo_tts:
+    if config.use_manbo_tts:
         try:
             if tts_client is None:
                 tts_client = ManboTTS()
@@ -224,9 +223,9 @@ def tts_generate_wav(text: str, out_wav: str) -> None:
                 
                 # Apply speed change if needed
                 processed_audio = tmp_audio
-                if CFG.audio_speed != 1.0:
+                if config.audio_speed != 1.0:
                     speed_out = out_wav + ".speed.wav"
-                    if process_audio_speed(tmp_audio, speed_out, CFG.audio_speed):
+                    if process_audio_speed(tmp_audio, speed_out, config.audio_speed, config):
                         processed_audio = speed_out
                 
                 # Try to read with pydub (auto detect)
@@ -241,7 +240,7 @@ def tts_generate_wav(text: str, out_wav: str) -> None:
                         print(f"  -> MP3 read failed: {e_mp3}. Fallback...")
                         raise
                 
-                seg = seg.set_frame_rate(CFG.sr).set_channels(1) 
+                seg = seg.set_frame_rate(config.sr).set_channels(1) 
                 seg.export(out_wav, format="wav")
                 
                 # Cleanup
@@ -254,7 +253,7 @@ def tts_generate_wav(text: str, out_wav: str) -> None:
             print(f"ERROR: Manbo TTS failed ({e}). Fallback to silent.")
 
     # 尝试使用智谱 TTS (Legacy)
-    if CFG.use_zhipu_tts:
+    if config.use_zhipu_tts:
         # ... (Zhipu logic kept but disabled by config) ...
         pass
 
@@ -264,11 +263,11 @@ def tts_generate_wav(text: str, out_wav: str) -> None:
     # 生成一个 440Hz 的正弦波 (beep) 替代静音，确保能听到
     from pydub.generators import Sine
     audio = Sine(440).to_audio_segment(duration=est_ms).apply_gain(-10)
-    audio = audio.set_frame_rate(CFG.sr).set_channels(1)
+    audio = audio.set_frame_rate(config.sr).set_channels(1)
     audio.export(out_wav, format="wav")
 
 
-def build_voice_and_timings(sentences: List[str], keywords: List[str], work: str) -> Tuple[str, List[Tuple[float, float, str]]]:
+def build_voice_and_timings(sentences: List[str], keywords: List[str], work: str, config: Config) -> Tuple[str, List[Tuple[float, float, str]]]:
     ensure_dir(work)
     segments = []
     timings = []
@@ -276,14 +275,14 @@ def build_voice_and_timings(sentences: List[str], keywords: List[str], work: str
     
     for i, s in enumerate(sentences):
         tmp = os.path.join(work, f"tts_{i:03d}.wav")
-        tts_generate_wav(s, tmp)
+        tts_generate_wav(s, tmp, config)
         
         # 验证生成的wav是否有效
         try:
             seg = AudioSegment.from_file(tmp)
         except:
             # 再次fallback防止崩
-            seg = AudioSegment.silent(duration=1000, frame_rate=CFG.sr)
+            seg = AudioSegment.silent(duration=1000, frame_rate=config.sr)
             
         dur = seg.duration_seconds
         sub = highlight_keywords(s, keywords)
@@ -291,28 +290,66 @@ def build_voice_and_timings(sentences: List[str], keywords: List[str], work: str
         t += dur
         
         # 句间停顿 0.15s
-        pause = AudioSegment.silent(duration=150, frame_rate=CFG.sr)
+        pause = AudioSegment.silent(duration=150, frame_rate=config.sr)
         segments.append(seg + pause)
         t += 0.15
 
     if not segments:
-        voice = AudioSegment.silent(duration=1000, frame_rate=CFG.sr)
+        voice = AudioSegment.silent(duration=1000, frame_rate=config.sr)
     else:
         voice = sum(segments)
 
     # 统一输出格式：48k, Stereo
     voice_wav = os.path.join(work, "voice.wav")
-    voice = voice.set_frame_rate(CFG.sr).set_channels(2)
+    voice = voice.set_frame_rate(config.sr).set_channels(2)
     voice.export(voice_wav, format="wav")
     
     # 【自检】
-    check_wav_volume(voice_wav)
+    check_wav_volume(voice_wav, config)
     
     return voice_wav, timings
 
 
-def render_ass(timings: List[Tuple[float, float, str]], ass_tpl_path: str, out_ass: str) -> None:
-    tpl = Path(ass_tpl_path).read_text(encoding="utf-8")
+def render_ass(timings: List[Tuple[float, float, str]], ass_tpl_path: str, out_ass: str, config: Config) -> None:
+    # If using dynamic template based on resolution
+    # But for now, let's assume the template file is still used, 
+    # OR we can inject resolution specific margins here.
+    
+    # Check if using file or generating dynamic
+    # Let's try to read the file first
+    try:
+        tpl = Path(ass_tpl_path).read_text(encoding="utf-8")
+    except:
+        # Fallback to default string if file not found
+        # 400 margin for vertical (1280h), maybe 50 for horizontal (720h)
+        margin_v = 400 if config.out_h > config.out_w else 50
+        tpl = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {config.out_w}
+PlayResY: {config.out_h}
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Microsoft YaHei,50,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,2,0,2,20,20,{margin_v},1
+Style: Emph,Microsoft YaHei,60,&H0000FFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,2,0,2,20,20,{margin_v},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+{{events}}
+"""
+    
+    # If we read from file, we might want to override PlayRes and MarginV?
+    # For now, let's rely on the file if it exists, but user might want horizontal support.
+    # If the file is hardcoded to 720x1280, it will break horizontal layout.
+    # So we should probably dynamically adjust it or use two templates.
+    # Let's dynamically patch it if it's the default template.
+    if "PlayResY: 1280" in tpl and config.out_w > config.out_h:
+        # Switching to Horizontal
+        tpl = tpl.replace("PlayResX: 720", f"PlayResX: {config.out_w}")
+        tpl = tpl.replace("PlayResY: 1280", f"PlayResY: {config.out_h}")
+        # Adjust margin V from 400 to 50
+        tpl = tpl.replace(",400,1", ",50,1")
+    
     events = []
     for (st, ed, text) in timings:
         start = sec_to_ass_time(st)
@@ -325,12 +362,12 @@ def render_ass(timings: List[Tuple[float, float, str]], ass_tpl_path: str, out_a
 # -------------------------
 # FFmpeg pipeline
 # -------------------------
-def make_vertical_clip(in_videos: List[str], out_video: str) -> None:
+def make_clip(in_videos: List[str], out_video: str, config: Config) -> None:
     """
     【画面优化】
     1. 随机拼接多个视频
-    2. 缩放+裁切到 720x1280
-    3. FPS=60
+    2. 缩放+裁切到 config.out_w x config.out_h
+    3. FPS=config.fps
     4. Zoompan 动态效果
     5. Drawtext 钩子文案
     """
@@ -348,11 +385,18 @@ def make_vertical_clip(in_videos: List[str], out_video: str) -> None:
         # 注意：[0:v] 引用第0个输入
         # filter: [0:v]scale=...[v0]
         
+        # Scale logic: cover the target aspect ratio
+        # if (iw/ih > out_w/out_h) -> scale height to out_h, width auto (-2)
+        # else -> scale width to out_w, height auto (-2)
+        # Then crop to out_w:out_h
+        
+        target_ar = config.out_w / config.out_h
+        
         filter_scale_crop = (
             f"[{i}:v]"
-            f"scale=if(gte(iw/ih\,{CFG.out_w}/{CFG.out_h})\,-2\,{CFG.out_w}):"
-            f"if(gte(iw/ih\,{CFG.out_w}/{CFG.out_h})\,{CFG.out_h}\,-2),"
-            f"crop={CFG.out_w}:{CFG.out_h}[v{i}];"
+            f"scale=if(gte(iw/ih\,{target_ar})\,-2\,{config.out_w}):"
+            f"if(gte(iw/ih\,{target_ar})\,{config.out_h}\,-2),"
+            f"crop={config.out_w}:{config.out_h}[v{i}];"
         )
         filter_parts.append(filter_scale_crop)
     
@@ -363,22 +407,25 @@ def make_vertical_clip(in_videos: List[str], out_video: str) -> None:
     # 2. 动态效果 (Zoompan) on [v_concat]
     zoompan_in = "[v_concat]"
     
-    if CFG.enable_zoompan:
+    if config.enable_zoompan:
         z_expr = "min(zoom+0.0005,1.1)" 
         y_expr = "ih/2-(ih/zoom/2) - (ih*0.05)"
         x_expr = "iw/2-(iw/zoom/2)"
         
         filter_parts.append(
             f"{zoompan_in}zoompan=z='{z_expr}':d=1:"
-            f"x='{x_expr}':y='{y_expr}':s={CFG.out_w}x{CFG.out_h}:fps={CFG.fps}[v_zoom];"
+            f"x='{x_expr}':y='{y_expr}':s={config.out_w}x{config.out_h}:fps={config.fps}[v_zoom];"
         )
         final_v = "[v_zoom]"
     else:
         final_v = zoompan_in
 
     # 3. 钩子文案 (Drawtext)
-    if CFG.hook_text:
-        txt = CFG.hook_text
+    if config.hook_text:
+        txt = config.hook_text
+        # Adjust Y position for horizontal? 
+        # For vertical (1280h), y=150 is good (top area).
+        # For horizontal (720h), y=150 is also okay (top area).
         dt = (
             f"{final_v}drawtext=font='Microsoft YaHei':text='{txt}':"
             "fontcolor=yellow:fontsize=60:borderw=3:bordercolor=black:"
@@ -390,40 +437,14 @@ def make_vertical_clip(in_videos: List[str], out_video: str) -> None:
     
     # 组合整个 complex filter
     filter_complex = "".join(filter_parts)
-    # Remove trailing semicolon if any (though usually fine)
-    
-    # 注意：如果视频总时长小于 duration_sec，stream_loop -1 对 filter complex 无效
-    # concat 后的流无法简单 loop。
-    # 简单策略：如果总时长不够，我们在 inputs 里重复添加视频直到够？
-    # 或者，利用 -stream_loop -1 在输入层？
-    # -stream_loop -1 -i v1 -stream_loop -1 -i v2 ...
-    # 这样 concat 会无限长？ffmpeg 可能会卡死或只取最长？
-    # 稳妥策略：在 Python 层重复列表，确保至少有 3-4 个视频循环，或者足够长
-    
-    # 重复列表以确保足够覆盖 duration_sec (60s)
-    # 假设每个视频至少 5s，重复 15 次足够
-    # 但为了避免 filter string 过长，我们先不做无限 loop，
-    # 而是假设输入文件夹里的素材够多，或者循环 selected_videos 列表几次
-    
-    # Re-construct inputs with loop in mind
-    # Better: just multiply the list in python
-    pass # Implementation below handles this by re-calling logic if needed?
-    # No, let's just make sure in_videos list is long enough.
     
     vf_chain = filter_complex
 
-    cmd = [CFG.ffmpeg, "-y"]
-    
-    # Apply stream_loop to each input? 
-    # No, that makes them infinite. Concat of infinite streams never finishes first segment.
-    # We must NOT loop inputs indefinitely if using concat.
-    
-    # We will loop the output using -stream_loop on the result? No.
-    # We will just generate a long enough video.
+    cmd = [config.ffmpeg, "-y"]
     
     cmd.extend(inputs)
     cmd.extend([
-        "-t", str(CFG.duration_sec),
+        "-t", str(config.duration_sec),
         "-filter_complex", vf_chain,
         "-map", final_v, # Map the final output pad
         "-an", 
@@ -436,18 +457,18 @@ def make_vertical_clip(in_videos: List[str], out_video: str) -> None:
     
     run(cmd)
 
-def make_vertical_clip_wrapper(videos: List[str], out_video: str):
-    # Ensure we have enough clips for 60s
+def make_clip_wrapper(videos: List[str], out_video: str, config: Config):
+    # Ensure we have enough clips for duration
     # Simple heuristic: repeat the list 5 times
     long_list = videos * 5
     # Limit to reasonable number to avoid huge command line (e.g. max 20 clips)
     if len(long_list) > 20:
         long_list = long_list[:20]
         
-    make_vertical_clip(long_list, out_video)
+    make_clip(long_list, out_video, config)
 
 
-def mux_with_voice_bgm_and_subtitles(vertical_video: str, voice_wav: str, ass_path: str, out_mp4: str) -> None:
+def mux_with_voice_bgm_and_subtitles(vertical_video: str, voice_wav: str, ass_path: str, out_mp4: str, config: Config) -> None:
     """
     【声音优化】
     1. 侧链压缩 (Ducking): Voice 出现时压低 BGM
@@ -484,10 +505,10 @@ def mux_with_voice_bgm_and_subtitles(vertical_video: str, voice_wav: str, ass_pa
     )
 
     run([
-        CFG.ffmpeg, "-y",
+        config.ffmpeg, "-y",
         "-i", vertical_video,
         "-i", voice_wav,
-        "-i", CFG.bgm_path,
+        "-i", config.bgm_path,
         "-filter_complex", af,
         "-map", "0:v:0",
         "-map", "[aout]",
@@ -506,31 +527,32 @@ def mux_with_voice_bgm_and_subtitles(vertical_video: str, voice_wav: str, ass_pa
     ])
     
     # 【自检】
-    check_audio_streams(out_mp4)
+    check_audio_streams(out_mp4, config)
 
 
 def main():
+    cfg = Config()
+    
     # 检查 Key
-    if not CFG.zhipu_api_key and CFG.use_zhipu_tts:
+    if not cfg.zhipu_api_key and cfg.use_zhipu_tts:
         print("WARNING: ZHIPU_API_KEY is not set in environment variables!")
         print("Set it via: $env:ZHIPU_API_KEY='your_key' (PowerShell) or set in code.")
     
     ensure_dir("output")
-    ensure_dir(CFG.work_dir)
+    ensure_dir(cfg.work_dir)
 
-    in_video_dir = "E:\\jj\\input"
-    out_vertical = os.path.join(CFG.work_dir, "vertical.mp4")
-    out_ass = os.path.join(CFG.work_dir, "sub.ass")
+    out_clip = os.path.join(cfg.work_dir, "clip.mp4")
+    out_ass = os.path.join(cfg.work_dir, "sub.ass")
     out_final = "output/final.mp4"
 
     # Find video files
     video_exts = ("*.mp4", "*.mov", "*.mkv")
     all_videos = []
     for ext in video_exts:
-        all_videos.extend(glob.glob(os.path.join(in_video_dir, ext)))
+        all_videos.extend(glob.glob(os.path.join(cfg.in_video_dir, ext)))
     
     if not all_videos:
-        print(f"Error: No video files found in {in_video_dir}")
+        print(f"Error: No video files found in {cfg.in_video_dir}")
         return
 
     # Randomly select multiple videos to form a montage
@@ -539,21 +561,19 @@ def main():
     selected_videos = all_videos 
     print(f"Selected {len(selected_videos)} videos for montage: {[os.path.basename(v) for v in selected_videos]}")
 
-    # Load script from E:\jj\文案 directory (random text file)
-    script_dir = r"E:\jj\文案"
+    # Load script from script_dir (random text file)
     script_path = None
     
-    if os.path.isdir(script_dir):
-        txt_files = glob.glob(os.path.join(script_dir, "*.txt"))
+    if os.path.isdir(cfg.script_dir):
+        txt_files = glob.glob(os.path.join(cfg.script_dir, "*.txt"))
         if txt_files:
             script_path = random.choice(txt_files)
             print(f"Selected script file: {script_path}")
             
             # Use filename (without extension) as hook text
             filename = os.path.splitext(os.path.basename(script_path))[0]
-            # Simple heuristic: if filename is long, it might be the hook
-            CFG.hook_text = filename
-            print(f"Set Hook Text from filename: {CFG.hook_text}")
+            cfg.hook_text = filename
+            print(f"Set Hook Text from filename: {cfg.hook_text}")
     
     sentences = []
     if script_path and os.path.exists(script_path):
@@ -563,10 +583,6 @@ def main():
                 # Filter empty lines and strip whitespace
                 lines = [line.strip() for line in f if line.strip()]
                 
-            # If first line looks like a title/hook (short), we could use it too?
-            # User said "用...文案和标题". Assuming filename is title is safer if file content is just body.
-            # But let's check if first line is very short and matches filename?
-            # For now, just load all lines as script body.
             sentences = lines
             print(f"Loaded {len(sentences)} lines of text.")
         except Exception as e:
@@ -583,17 +599,17 @@ def main():
         keywords = ["押金", "跑刀", "老板", "筛人机制", "风险"]
 
     print("--- Step 1: Video Processing (Zoompan + 60fps) ---")
-    make_vertical_clip_wrapper(selected_videos, out_vertical)
+    make_clip_wrapper(selected_videos, out_clip, cfg)
 
     print("--- Step 2: TTS Generation (with MP3 fix) ---")
     # sentences is already prepared above
-    voice_wav, timings = build_voice_and_timings(sentences, keywords, CFG.work_dir)
+    voice_wav, timings = build_voice_and_timings(sentences, keywords, cfg.work_dir, cfg)
 
     print("--- Step 3: Subtitle Rendering ---")
-    render_ass(timings, CFG.ass_tpl_path, out_ass)
+    render_ass(timings, cfg.ass_tpl_path, out_ass, cfg)
 
     print("--- Step 4: Final Mixing (Ducking + Loudnorm) ---")
-    mux_with_voice_bgm_and_subtitles(out_vertical, voice_wav, out_ass, out_final)
+    mux_with_voice_bgm_and_subtitles(out_clip, voice_wav, out_ass, out_final, cfg)
 
     print("\nALL DONE:", out_final)
 

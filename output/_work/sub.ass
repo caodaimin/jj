@@ -1,12 +1,12 @@
 [Script Info]
 ScriptType: v4.00+
-PlayResX: 720
-PlayResY: 1280
+PlayResX: 1280
+PlayResY: 720
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Microsoft YaHei,50,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,2,0,2,20,20,400,1
-Style: Emph,Microsoft YaHei,60,&H0000FFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,2,0,2,20,20,400,1
+Style: Default,Microsoft YaHei,50,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,2,0,2,20,20,50,1
+Style: Emph,Microsoft YaHei,60,&H0000FFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,2,0,2,20,20,50,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -15,14 +15,14 @@ Dialogue: 0,0:00:01.23,0:00:02.81,Default,,0,0,0,,{\rEmph}跑刀{\rDefault}为�
 Dialogue: 0,0:00:02.96,0:00:04.33,Default,,0,0,0,,我反过来问你一句：
 Dialogue: 0,0:00:04.48,0:00:06.78,Default,,0,0,0,,不收{\rEmph}押金{\rDefault}的，你敢把号给他吗？
 Dialogue: 0,0:00:06.93,0:00:08.19,Default,,0,0,0,,{\rEmph}押金{\rDefault}不是套路，
-Dialogue: 0,0:00:08.34,0:00:09.36,Default,,0,0,0,,是{\rEmph}筛人机制{\rDefault}。
-Dialogue: 0,0:00:09.51,0:00:11.17,Default,,0,0,0,,{\rEmph}跑刀{\rDefault}这行最怕三种人：
-Dialogue: 0,0:00:11.32,0:00:14.51,Default,,0,0,0,,跑一半消失的，偷仓库的，出事不负责的
-Dialogue: 0,0:00:14.66,0:00:16.53,Default,,0,0,0,,{\rEmph}押金{\rDefault}、考核、流程是为了保证
-Dialogue: 0,0:00:16.68,0:00:19.60,Default,,0,0,0,,你敢接单，我敢派号，{\rEmph}老板{\rDefault}敢下单。
-Dialogue: 0,0:00:19.75,0:00:21.11,Default,,0,0,0,,真正长期能跑的，
-Dialogue: 0,0:00:21.26,0:00:22.74,Default,,0,0,0,,几天就能赚回{\rEmph}押金{\rDefault}。
-Dialogue: 0,0:00:22.89,0:00:24.50,Default,,0,0,0,,不想承担一点{\rEmph}风险{\rDefault}的，
-Dialogue: 0,0:00:24.65,0:00:25.95,Default,,0,0,0,,本来也不适合跑。
-Dialogue: 0,0:00:26.10,0:00:27.34,Default,,0,0,0,,评论区说清楚：
-Dialogue: 0,0:00:27.49,0:00:29.78,Default,,0,0,0,,什么样的{\rEmph}跑刀{\rDefault}，{\rEmph}老板{\rDefault}才会长期用。
+Dialogue: 0,0:00:08.34,0:00:10.34,Default,,0,0,0,,是筛人机制。
+Dialogue: 0,0:00:10.49,0:00:12.15,Default,,0,0,0,,{\rEmph}跑刀{\rDefault}这行最怕三种人：
+Dialogue: 0,0:00:12.30,0:00:15.49,Default,,0,0,0,,跑一半消失的，偷仓库的，出事不负责的
+Dialogue: 0,0:00:15.64,0:00:17.51,Default,,0,0,0,,{\rEmph}押金{\rDefault}、考核、流程是为了保证
+Dialogue: 0,0:00:17.66,0:00:20.58,Default,,0,0,0,,你敢接单，我敢派号，{\rEmph}老板{\rDefault}敢下单。
+Dialogue: 0,0:00:20.73,0:00:22.09,Default,,0,0,0,,真正长期能跑的，
+Dialogue: 0,0:00:22.24,0:00:23.72,Default,,0,0,0,,几天就能赚回{\rEmph}押金{\rDefault}。
+Dialogue: 0,0:00:23.87,0:00:25.48,Default,,0,0,0,,不想承担一点{\rEmph}风险{\rDefault}的，
+Dialogue: 0,0:00:25.63,0:00:26.93,Default,,0,0,0,,本来也不适合跑。
+Dialogue: 0,0:00:27.08,0:00:28.32,Default,,0,0,0,,评论区说清楚：
+Dialogue: 0,0:00:28.47,0:00:30.76,Default,,0,0,0,,什么样的{\rEmph}跑刀{\rDefault}，{\rEmph}老板{\rDefault}才会长期用。
